@@ -1,0 +1,209 @@
+---
+title: "NEON Small Mammal Data in R"
+output:
+  html_document:
+    df_print: paged
+---
+
+Last week, we did a preliminary data analysis activity working with NEON small mammal data in Excel. We can accomplish the same tasks in a *reproducible* way in R-- that is, the steps you took to accomplish a particular outcome are transparent (i.e., because they are written out in code) and can thus be replicated exactly the same way again and again! 
+
+Follow along in this activity to learn and practice some key functions for data wrangling and cleaning. Your Week 2 assignment is based on this activity; **please type answers to each bolded question as you work through the script, then answer the final 4 questions as a wrap-up.**
+
+## 1. Load packages and data file  
+As before, our first step is to install (if necessary) and load our R packages. Since you have already installed `tidyverse` earlier during our class activity, you probably don't need to make any changes, and can just run the chunk below. If for some reason `tidyverse` is not installed, delete the #, then run the chunk!
+```{r, message=FALSE, warning=FALSE}
+#install.packages('tidyverse', repos = "http://cran.us.r-project.org")
+library(tidyverse)
+```
+We will also go ahead and install/load a package called `lubridate`, which makes working with dates in R much easier.
+```{r, message=FALSE, warning=FALSE}
+install.packages('lubridate', repos = "http://cran.us.r-project.org")
+library(lubridate)
+```
+
+Once the packages are loaded and ready to go, we'll run the next chunk of code to upload our data file. Note that this is the **exact** same .csv file we opened up in Excel during last week's activity.
+```{r, message=FALSE, warning=FALSE}
+raw <- read_csv('./NEON.D02.SCBI.DP1.10072.001.mam_pertrapnight.072014to052015.csv')
+```
+
+As in our in-class activity, use either a head(), glimpse() and/or View() command to take a quick look at the data. Hint: put the datatable name (here, **raw**) inside the parentheses in your code chunk!
+```{r}
+# YOUR CODE HERE
+```
+
+Because this is the **raw** data, it includes a number of columns of data that are not necessarily related to the analyses we are interested in. Follow the steps below to "tidy" your data file, then perform the Lincoln-Peterson mark-recapture calculation, and answer the reflection questions at the end.
+
+## 2. Wrangling in `dplyr` 
+Within `tidyverse`, the `dplyr` package is like a multi-tool for data wrangling. It includes functions that can subset your data based on specific conditions, calculate summary values across different groups, add new columns, and lots more. 
+
+Here, we'll just explore a *few* of `dplyr` functions. You can visit [dplyr.tidyverse.org](https://dplyr.tidyverse.org/) to learn more about all the different tools in `dplyr`!
+
+### Selecting columns with `select`  
+Sometimes, there are columns in our datasheet that we may not need for a particular analysis that we want to hide but not delete altogether. We can use the `select` function to select specific columns based on their column name.  
+
+#### Example 1: 
+Let's say we want to *just* look at the mammal species captured and their unique ID tags. 
+
+We could run the chunk of code below to select only those focal columns:
+```{r}
+ex1 <- raw %>% 
+  select(taxonID, tagID) %>%   # Select the taxonID and tagID columns
+  na.omit()                    # Omit "NA" rows
+```
+**How many rows of data do we have in this subset, compared to the *raw* data file?**
+
+#### Example 2: 
+Similarly, we could use the `select` function to *remove* certain columns from our data table when we subset the data.
+```{r}
+ex2 <- raw %>% 
+  select(-uid, -nightuid, -namedLocation, -domainID) # "Anti"select each of these four columns
+```
+
+#### Challenge! 
+For our Lincoln-Peterson model, we specifically need information about the plot ID, collection date, individual tag ID, and species/taxon captured. Just for fun, we might also want to know the sex and lifestage of captured/recaptured individuals. 
+
+Use the following chunk of code to print out all the column names of our raw datatable, and then complete the next chunk by using a select() function to retain the columns mentioned above. As in the examples, you can either select the columns you want to *keep* or "anti"select the columns you want to *remove*. 
+
+Note that when you run your completed code chunk, your subset data is called "subset", since we always want to keep an untouched version of our raw data file!
+```{r}
+names(raw)  # Print out a list of the column names
+```
+```{r}
+subset <- raw %>% 
+  select() # TYPE YOUR CODE INSIDE THE ()s!
+```
+**How many *columns* are retained in your subset datatable, compared to the raw data? How many rows?**
+
+### Creating new columns with `mutate`
+On the other hand, we may want to add *new* columns to our datasheet, for example as a calculated value. 
+In our case, we may want to use `mutate()` to create some new date columns, which will make selecting a specific sampling campaign (year + two months) easier.
+
+We can add new columns for year and sampling month by running the following chunk: 
+```{r}
+subset <- subset %>% 
+  mutate(year = year(collectDate),
+         month = month(collectDate))
+```
+By default, these columns will be added to the end of your datasheet.  
+**Check a few rows of your 'subset' datasheet to make sure your command worked correctly!**
+
+### Subsetting rows with `filter()`
+Next, the `filter()` function allows us to keep or exclude **rows** based on conditions we set for different variables. Let's look at a couple of examples to see how it works. 
+
+#### Example 3: 
+In this example, we will `filter()` the rows that correspond to adult mammals captured in a trap.
+Within the filter command, you will type the column name that you want to use as your filter (here, 'lifeStage'), then 2 equal signs, then the value that you are filtering for (here, 'adult'). Note that your capitalization of the column name *and* the filtering criterion must *exactly* match what is in the data file (so 'lifeStage' not 'Life Stage' or 'lifestage', and 'adult' not 'Adult').
+```{r}
+adults <- subset %>% 
+  filter(lifeStage == 'adult')
+```
+**How many *observations* (rows of data) remain after you applied the `filter()` command?**
+
+#### Example 4:
+You can also combine multiple filtering criteria into one `filter()` command by including an &. This would allow us to, for example, retain only rows that are adult females captured in Plot 2 ('SCBI_002') during July and August 2014.
+```{r}
+adult_subset <- subset %>% 
+  filter(lifeStage == 'adult' & 
+           sex == 'F' & 
+           plotID == 'SCBI_004' &
+           year == 2014 &
+           month %in% c(7, 8))
+```
+
+#### Challenge: 
+Recall from last week that for the Lincoln-Peterson calculation, we need to focus on a specific taxon, plot, and sampling period. 
+
+Complete the `filter()` commands below to filter your "subset" datasheet for white-footed mice (PELE) at a specific plot (2, 4, or 8) and season (one of the year + months combinations in the table below).
+
+Season | Year | Months
+-------|------|-------
+Spring | 2015 | 4,5
+Summer | 2014 | 7,8
+Fall   | 2014 | 9,10
+
+Note that because the taxon ID and plot ID include characters, they need to be in quotation marks; numeric year and month values do not.
+
+```{r}
+PELE <- subset %>% 
+  filter(taxonID == '' &
+           plotID == '' &
+           year ==  &
+           month %in% c(,)
+    )
+```
+**Check your PELE datasheet to make sure that everything worked as planned!**   
+**How many total observations did your site have during your selected sampling season?**
+
+### Grouping using `group_by()`
+One of the trickiest steps in the Excel version of this activity was counting the unique individuals captured each month, based on their tagID. With a few commands, we can do this much more easily to calculate our Lincoln-Peterson estimate!
+
+Here, we start with our PELE dataset, then group the observations by month, and count how many datapoints there were in each group.
+```{r}
+captures_by_month <- PELE %>% 
+  group_by(month) %>% 
+  tally()
+
+print(captures_by_month)
+```
+
+We can have R save those values for our later calculation; we know from the Lincoln-Peterson equation that the total captures in month 1 and 2 are n1 and n2, respectively.
+```{r}
+n1 <- captures_by_month[1,2]  # This says, "Save the value from the first row, second column
+n2 <- captures_by_month[2,2]  # This says, "Save the value from the second row, second column
+```
+
+While calculating *recaptures* is a little bit trickier, it can still be done! Here, we group by tagID AND month, then tally the number of times each individual was seen.
+```{r}
+recaptures <- PELE %>% 
+  group_by(tagID, month) %>%       
+  tally()                          
+ 
+head(recaptures)
+```
+Next, we rearrange the columns so that each month's tallys for each individual are side-by-side. We can then `filter()` our datasheet to only keep individuals who were captured in *both* months! (This is the `drop_na()` command-- remove individuals who have NA values for one of the two months)
+```{r}
+recaptures <- recaptures %>% 
+  pivot_wider(id_cols = tagID, 
+              names_from = month,
+              values_from = n) %>% 
+  ungroup() 
+
+print(recaptures)
+
+recaptures <- recaptures %>% 
+  drop_na()
+
+print(recaptures)
+```
+
+Finally, we tally the number of unique individuals we saw in *both* months, and save it as our "m2" value.
+Note that these three chunks could have been combined into one, but I broke them out so you can view what R is doing with each step.
+```{r}
+m2 <- tally(recaptures)
+```
+
+Now, we're ready for our Lincoln-Peterson estimation! 
+Since we have our n1, n2, and m2 values, we just set up an equation to tell us the estimate for N!
+```{r}
+N <- n1 / (m2/n2)
+print(N)
+```
+**What is your total estimated population size? Does this make sense, given the number of individuals captured in each individual month?**
+
+### Final reflection questions
+Please type your answers to the following, in your own words. Thorough answers would likely be at least 2-3 sentences each unless otherwise indicated.
+
+1. Describe some of the advantages of conducting your Lincoln-Peterson analysis in R vs. Excel.  
+
+2. How does using R for your analysis promote "open science"?  
+
+3. What is FAIR data? (Can list the acronym here; don't need complete sentences)  
+
+4. Define metadata, and describe why it is an essential piece of FAIR data.  
+
+### Submit your file:
+1. Press "Knit" above, which should produce an html version where you can preview your output. Make sure everything looks right, and that you completed each step that required you to enter/modify code!   
+
+2. Save this file, with your written answers, in RStudio by going to File --> SaveAs, and then saving a version of the RMarkdown file with your name in the file name.   
+
+3. Upload your .Rmd file (with **your name** in the file name) to the Week 2 eLC Dropbox.

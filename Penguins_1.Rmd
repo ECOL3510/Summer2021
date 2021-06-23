@@ -1,0 +1,175 @@
+---
+title: "1st steps with R- Palmer penguins exploration"
+output:
+  html_document:
+    df_print: paged
+---
+
+## Installing and loading packages
+
+The first step to start any R exploration is to install and activate the "packages" that perform the behind-the-scenes functions of your analysis. For our class, we will use packages that are contained within the "tidyverse", which is a wrapper package that lets you install and open one package, but with others embedded behind the scenes.
+
+To install a package, you run the following command:
+
+```{r, message=FALSE}
+install.packages('tidyverse', repos = "http://cran.us.r-project.org")
+```
+
+Note that if installing a different package, you would substitute its name instead of *tidyverse*
+
+Next, you need to tell R to activate the packages you just installed. If you have previously installed a package on your computer, you do not need to install it each time you open R. Instead, you would just skip to this code step:
+
+```{r}
+library(tidyverse)
+```
+
+## Load and view a demonstration dataset
+
+Today, we will use a pre-packaged dataset, [palmerpenguins](https://allisonhorst.github.io/palmerpenguins/), to explore some commands we can use to organize and visualize ecological data.
+
+First, we need to install and load the palmerpenguins dataset, by running the code chunk below. Note that if you have not previously installed the palmerpenguins package, you will need to **delete the \#** in front of the install.packages command in the chunk below, then run the chunk.
+
+```{r, message=FALSE}
+#install.packages('palmerpenguins', repos = "http://cran.us.r-project.org")
+library(palmerpenguins)
+
+# This line prints the citation to the data package developers- just like we cite papers, it is important to cite our data sources!
+citation("palmerpenguins")
+```
+
+Let's see what these penguin data look like!
+
+We'll start with a curated subset of the data, then look at the original raw data.
+
+```{r}
+view(penguins)
+# This will open up the full data table (called a "dataframe" in tidyverse language) in a new RStudio window
+```
+
+You can also have R show you a *preview* of the first few lines of code in the dataframe, by running the command below. This `glimpse` command has the added benefit of telling you the *structure* of each data column, in terms of whether it is a factor, an integer, etc.
+
+```{r}
+glimpse(penguins)
+```
+
+**How many columns and rows of data are there?** 
+**Which columns are characters/factors, and which are numeric ('integer' or 'double')?**
+
+## Explore the data using `tidyverse` functions
+
+Packages embedded within `tidyverse` and their individual functions, are helpful for organizing and subsetting data, doing calculations, and making visualizations. We will explore some of those as we attempt to answer questions about our penguins and their ecology!
+
+### How many species of penguins, and how many individuals of each species, were studied?
+
+We can use the `count` function to have R tally the number of observations for a particular variable in our data. Here, we want to tally the number of individuals included from each penguin **species**.
+
+```{r}
+penguins %>% 
+  count(species)
+```
+
+**Take a moment to image search at least one of these species and show it to your neighbors, because penguins are adorable! :)**
+You can then paste the URL of your image instead of the placeholder image URL below:
+![](https://cdn.pixabay.com/photo/2020/12/23/14/38/penguin-5855183_1280.png)
+
+### How many individuals were found on each island?
+
+Here, you will use the `count` function again, but with the goal of tallying the number of individual penguins studied across the multiple **islands**.
+
+```{r}
+### Your code here! (remember you can copy/paste from a different code chunk and then modify as needed, if you would like!)
+```
+
+**Which island had the largest total penguin population?**
+
+Now, try *also* including the species variable name in your count function, to see if you can simultaneously tally penguins across islands by species! (Hint: You can do  this by including two variable names, separated by a comma, inside the count() function)
+
+```{r}
+### Your code here! (remember you can copy/paste from a different code chunk and then modify as needed, if you would like!)
+```
+To plot the species counts for each island, run the chunk below! (We'll dive deeper into making our *own* graphs in a few weeks!)
+```{r}
+ggplot(penguins, aes(x = species, fill = island)) +
+  geom_bar(alpha = 0.8) +
+  scale_fill_manual(values = c("darkorange","purple","cyan4"),
+                    guide = FALSE) +
+  theme_minimal() +
+  facet_wrap(~island, ncol = 1) +
+  coord_flip()
+```
+
+**Were all penguin species present on all islands?**
+
+**Based on your data and calculations, write a prediction that could theoretically be tested about why penguins inhabit (or not!) certain islands. What additional types of data would you need to test that prediction?**
+
+## Summary statistics
+
+While Excel has built in functions we can use to separately calculate mean, median, etc., we can use a single command to get some quick summary statistics about the variables measured for the penguins, by running the chunk below:
+
+```{r}
+summary(penguins)
+```
+A potentially-underappreciated aspect of this quick summary is that it also tells us how many missing (NA) values there are for each variable in the dataset!
+
+**How many missing values are there for penguin bill length? For sex? For species?**
+
+While the summary above was calculated based on all the penguins together, we might want to calculate some of these values separately by species, sex, island, or some combination of our qualitative variables.
+
+We can tell R to `group_by` to define the categories or factors across which we want our data to be grouped before calculating. 
+
+Try running the chunk below to calculate some summary statistics (using `summarize`) by sex:
+```{r}
+means_by_sex <- penguins %>% 
+  group_by(sex) %>% 
+  drop_na() %>% 
+  summarize(mean_body_mass_g = mean(body_mass_g), 
+            mean_flipper_length_mm = mean(flipper_length_mm), 
+            n = n())
+```
+
+```{r}
+ggplot(data = penguins, 
+       aes(x = sex, 
+           y = body_mass_g)) +
+  geom_jitter(width = .2, aes(col = species)) +
+  scale_color_manual(values = c("darkorange","purple","cyan4")) +
+  theme_minimal()
+```
+What if you want to show the species across the x-axis and color by sex (instead of species)? 
+Try updating the chunk below to do so!
+```{r}
+ggplot(data = penguins, 
+       aes(x = sex, 
+           y = body_mass_g)) +
+  geom_jitter(width = .2, aes(col = species)) +
+  theme_minimal()
+```
+**What patterns do you notice, based on these graphs? Which graph do you think better visualizes these data, and why?** 
+
+# Correlation between penguin measurements
+
+Since the dataset includes a number of quantitative measurements about penguin body size, we may want to look at how those measurements are related to each other (if at all). We can easily subset our data (similar to using the "Filter" tool in Excel) to focus on just those variables to conduct a correlation.
+
+First, we use the `select` function to list the columns we want to **keep**. The `drop_na()` command tells R that we only want to keep the rows that have numeric values; no NA's/missing data.
+```{r}
+quant <- penguins %>%
+  select(bill_length_mm, bill_depth_mm, flipper_length_mm, body_mass_g) %>% 
+  drop_na()
+```
+
+```{r}
+quant %>%
+  cor() 
+```
+**Which two measurements were most strongly correlated? Was the correlation positive or negative?**
+
+To visualize your correlation, modify the plotting command below to put the variable names from your correlation as the **x and y** axis variables.
+
+```{r}
+ggplot(data = penguins, 
+       aes(x = variable1, 
+           y = variable2)) +
+  geom_point(aes(color = species), size = 2) +
+  scale_color_manual(values = c("darkorange","darkorchid","cyan4")) +
+  theme_minimal()
+```
