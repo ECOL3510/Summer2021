@@ -1,0 +1,1 @@
+# This is a blank script to practice the GitHub workflow in RStudio
