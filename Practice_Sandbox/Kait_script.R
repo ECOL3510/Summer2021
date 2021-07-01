@@ -1,1 +1,2 @@
-# This is a blank script to practice the GitHub workflow in RStudio
+sum <- 3 + 23864298361
+# This is a test script
