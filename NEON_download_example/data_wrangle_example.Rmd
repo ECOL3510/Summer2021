@@ -1,0 +1,138 @@
+---
+title: "Mammal Temperature Data Wrangling"
+output: html_document
+---
+
+# Install & load packages  
+As always, we begin with the `install_packages()` (if needed) and `library()` commands to install and load individual packages, respectively.
+```{r, message = FALSE}
+#install.packages('tidyverse', repos = "http://cran.us.r-project.org")
+#install.packages('lubridate', repos = "http://cran.us.r-project.org")
+library(tidyverse)
+library(lubridate)
+library(hms)
+```
+
+# Read in raw **mammal** data
+```{r}
+path <- "./raw_mammals/"
+
+files <- list.files(path=path, pattern="*.csv")
+
+for(file in files){
+  perpos <- which(strsplit(file, "")[[1]]==".")
+  assign(
+    gsub(" ","",substr(file, 1, perpos-1)),
+    read_csv(paste(path,file,sep=""), guess_max = 10000))
+}
+```
+
+# Read in raw **temperature** data
+```{r}
+path <- "./raw_temp/"
+
+files <- list.files(path=path, pattern="*.csv")
+
+for(file in files){
+  perpos <- which(strsplit(file, "")[[1]]==".")
+  assign(
+    gsub(" ","",substr(file, 1, perpos-1)),
+    read_csv(paste(path,file,sep=""), guess_max = 10000))
+}
+```
+
+# Wrangle temperature data
+We always want to keep our **raw** data **raw**, so our next step will be to save a copy of our temperature data data as a different data object. Also for simplicity, we'll call it "temp" (shorter to type!)
+
+First, we'll remove 'NA' values in the tempSingleMean column and select the focal columns we are interested in
+```{r}
+temp <- SAAT_30min %>% 
+  filter(!is.na(tempSingleMean))
+```
+
+Next, we want to simplify our temperature data to at least a daily value. To do this, we will first use the `mutate()` function to create separate columns for date and time (rather than combined datetime). Next, we `select()` the columns we want to keep (including our new date and time columns) and then retain (`filter()`) only the rows of data from noon (12pm)
+```{r}
+temp_sub <- temp %>% 
+  mutate(date = as.Date(startDateTime),
+         month = month(date),
+         year = year(date),
+         time = as_hms(startDateTime)) %>% 
+  select(siteID, year, month, date, time, tempSingleMean:tempSingleMaximum)
+
+View(temp_sub)
+```
+
+```{r}
+monthly_temp <- temp_sub  %>% 
+  group_by(siteID, year, month) %>% 
+  summarize(monthlyMean = mean(tempSingleMean)) %>% 
+  arrange(siteID, year, month) %>% 
+  mutate(date = make_date(year, month))
+```
+
+If you want to save a copy of your *subset* data file, you can run the following command:
+```{r}
+monthly_temp %>% 
+  write_csv('./cleaned_data/monthly_temp.csv')
+```
+
+# Visualize cleaned up temperature data
+```{r}
+ggplot(monthly_temp, aes(x = date,
+                     y = monthlyMean, 
+                     col = siteID)) +
+  geom_point()
+```
+
+# Clean mammal data
+We always want to keep our **raw** data **raw**, so our next step will be to save a copy of our raw mammal trapping data as a different data object. Also for simplicity, we'll call it "mamdata" (shorter to type!)
+```{r}
+mam_raw <- mam_pertrapnight
+```
+
+Now we can use some of the `dplyr` functions we explored last week to begin filtering, organizing, and exploring the data!
+```{r}
+mam <- mam_raw %>% 
+  filter(!is.na(tagID)) %>% 
+  select(siteID, plotID, collectDate, tagID:weight) %>% 
+  mutate(date = as.Date(collectDate),
+         month = month(date),
+         year = year(date))
+```
+
+If you want to save a copy of your *subset* data file, you can run the following command:
+```{r}
+mam %>% 
+  write_csv('./cleaned_data/mammals_cleaned.csv')
+```
+
+Tally how many individuals per species were seen each month of sampling
+```{r}
+monthly_mam <- mam %>% 
+  group_by(siteID, year, month, taxonID) %>% 
+  tally()
+```
+
+Calculate monthly alpha diversity for each site as the number of distinct taxa seen per sampling month
+```{r}
+alpha <- monthly_mam %>% 
+  group_by(siteID, year, month) %>% 
+  summarize(alpha = n_distinct(taxonID))
+```
+
+```{r}
+alpha %>% 
+  write_csv('./cleaned_data/alpha_diversity.csv')
+```
+
+
+# Join monthly temperature and mammal data
+```{r}
+combined <- full_join(monthly_temp, alpha)
+```
+
+If you want to save a copy of your *subset* data file, you can run the following command:
+```{r}
+combined %>% 
+  write_csv('./cleaned_data/mammal_temp_combined.csv')
+```
