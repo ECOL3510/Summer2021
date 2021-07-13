@@ -6,8 +6,6 @@ output: html_document
 # Install & load packages  
 As always, we begin with the `install_packages()` (if needed) and `library()` commands to install and load individual packages, respectively.
 ```{r, message = FALSE}
-#install.packages('tidyverse', repos = "http://cran.us.r-project.org")
-#install.packages('lubridate', repos = "http://cran.us.r-project.org")
 library(tidyverse)
 library(lubridate)
 library(hms)
@@ -44,13 +42,20 @@ for(file in files){
 # Wrangle temperature data
 We always want to keep our **raw** data **raw**, so our next step will be to save a copy of our temperature data data as a different data object. Also for simplicity, we'll call it "temp" (shorter to type!)
 
-First, we'll remove 'NA' values in the tempSingleMean column and select the focal columns we are interested in
+First, we'll remove 'NA' values in the tempSingleMean column
 ```{r}
 temp <- SAAT_30min %>% 
   filter(!is.na(tempSingleMean))
 ```
 
-Next, we want to simplify our temperature data to at least a daily value. To do this, we will first use the `mutate()` function to create separate columns for date and time (rather than combined datetime). Next, we `select()` the columns we want to keep (including our new date and time columns) and then retain (`filter()`) only the rows of data from noon (12pm)
+Next, we want to simplify our temperature data to at least a daily value. To do this, we will first use a `mutate()` function to create separate columns for date and time (rather than combined datetime). Next, we `select()` the columns we want to keep (including our new date and time columns)
+
+To know which columns we might want to `select()`, it's helpful to have R re-print the column names for us.
+```{r}
+names(temp)
+```
+
+**Super-important note!** Make sure you include any data quality columns in your initial `select()` function! (in this file, the column is called **finalQF**)
 ```{r}
 temp_sub <- temp %>% 
   mutate(date = as.Date(startDateTime),
@@ -68,13 +73,15 @@ temp_sub <- temp_sub %>%
   filter(finalQF != 1)
 ```
 
-Now, we can group and summarize our data to get (in this example) montly temperature values
+Now, we can group and summarize our data to get (in this example) monthly temperature values
 ```{r}
 monthly_temp <- temp_sub  %>% 
   group_by(siteID, year, month) %>% 
   summarize(monthlyMean = mean(tempSingleMean)) %>% 
   arrange(siteID, year, month) %>% 
   mutate(date = make_date(year, month))
+
+View(monthly_temp)
 ```
 
 If you want to save a copy of your *subset* data file, you can run the following command:
@@ -83,7 +90,8 @@ monthly_temp %>%
   write_csv('./cleaned_data/monthly_temp.csv')
 ```
 
-# Visualize cleaned up temperature data
+# Quickly visualize cleaned up temperature data
+It's always a good idea to take a quick look at your data to make sure nothing looks *off* (e.g., major outliers, etc)
 ```{r}
 ggplot(monthly_temp, aes(x = date,
                      y = monthlyMean, 
@@ -92,16 +100,16 @@ ggplot(monthly_temp, aes(x = date,
 ```
 
 # Clean mammal data
-We always want to keep our **raw** data **raw**, so our next step will be to save a copy of our raw mammal trapping data as a different data object. Also for simplicity, we'll call it "mamdata" (shorter to type!)
+Our next step will be to save a copy of our raw mammal trapping data as a different data object. We'll call it "mam_raw"
 ```{r}
 mam_raw <- mam_pertrapnight
 ```
 
-Now we can use some of the `dplyr` functions we explored last week to begin filtering, organizing, and exploring the data!
+Now we can use some of the same `dplyr` functions to begin filtering, organizing, and exploring the data
 ```{r}
 mam <- mam_raw %>% 
   filter(!is.na(tagID)) %>% 
-  select(siteID, plotID, collectDate, tagID:weight) %>% 
+  select(siteID, plotID, collectDate, tagID:weight, dataQF) %>% 
   mutate(date = as.Date(collectDate),
          month = month(date),
          year = year(date))
@@ -118,6 +126,8 @@ Tally how many individuals per species were seen each month of sampling
 monthly_mam <- mam %>% 
   group_by(siteID, year, month, taxonID) %>% 
   tally()
+
+print(monthly_mam)
 ```
 
 Calculate monthly alpha diversity for each site as the number of distinct taxa seen per sampling month
@@ -125,8 +135,10 @@ Calculate monthly alpha diversity for each site as the number of distinct taxa s
 alpha <- monthly_mam %>% 
   group_by(siteID, year, month) %>% 
   summarize(alpha = n_distinct(taxonID))
-```
 
+print(alpha)
+```
+If you want to save a copy of any of your calculated values, you can do that too! (Here, we'll save a copy of the calculated alpha diversity)
 ```{r}
 alpha %>% 
   write_csv('./cleaned_data/alpha_diversity.csv')
@@ -134,11 +146,12 @@ alpha %>%
 
 
 # Join monthly temperature and mammal data
+We can also have R combine different data objects based on columns that they have in common. For our temperature and mammal data, they both share columns of siteID, year, and month 
 ```{r}
 combined <- full_join(monthly_temp, alpha)
 ```
 
-If you want to save a copy of your *subset* data file, you can run the following command:
+To save a copy of *this* output, you can again run a `write_csv()` command:
 ```{r}
 combined %>% 
   write_csv('./cleaned_data/mammal_temp_combined.csv')
