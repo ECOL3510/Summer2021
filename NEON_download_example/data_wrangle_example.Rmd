@@ -37,7 +37,7 @@ for(file in files){
   perpos <- which(strsplit(file, "")[[1]]==".")
   assign(
     gsub(" ","",substr(file, 1, perpos-1)),
-    read_csv(paste(path,file,sep=""), guess_max = 10000))
+    read_csv(paste(path,file,sep=""), guess_max = 500000))
 }
 ```
 
@@ -57,11 +57,18 @@ temp_sub <- temp %>%
          month = month(date),
          year = year(date),
          time = as_hms(startDateTime)) %>% 
-  select(siteID, year, month, date, time, tempSingleMean:tempSingleMaximum)
+  select(siteID, year, month, date, time, tempSingleMean:tempSingleMaximum, finalQF)
 
 View(temp_sub)
 ```
 
+We should only retain temperature values that do **not** have a failing quality flag (so our filter criterion would be: finalQF != 1 *or* finalQF == 0)
+```{r}
+temp_sub <- temp_sub %>% 
+  filter(finalQF != 1)
+```
+
+Now, we can group and summarize our data to get (in this example) montly temperature values
 ```{r}
 monthly_temp <- temp_sub  %>% 
   group_by(siteID, year, month) %>% 
