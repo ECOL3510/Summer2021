@@ -96,7 +96,8 @@ It's always a good idea to take a quick look at your data to make sure nothing l
 ggplot(monthly_temp, aes(x = date,
                      y = monthlyMean, 
                      col = siteID)) +
-  geom_point()
+  geom_point() +
+  theme_minimal()
 ```
 
 # Clean mammal data
@@ -138,12 +139,19 @@ alpha <- monthly_mam %>%
 
 print(alpha)
 ```
+Quick plot of our alpha diversity data across sites:
+```{r}
+ggplot(alpha, aes(x = siteID,
+                  y = alpha)) +
+  geom_boxplot() +
+  theme_minimal()
+```
+
 If you want to save a copy of any of your calculated values, you can do that too! (Here, we'll save a copy of the calculated alpha diversity)
 ```{r}
 alpha %>% 
   write_csv('./cleaned_data/alpha_diversity.csv')
 ```
-
 
 # Join monthly temperature and mammal data
 We can also have R combine different data objects based on columns that they have in common. For our temperature and mammal data, they both share columns of siteID, year, and month 
@@ -156,3 +164,14 @@ To save a copy of *this* output, you can again run a `write_csv()` command:
 combined %>% 
   write_csv('./cleaned_data/mammal_temp_combined.csv')
 ```
+
+Finally, as a "teaser" for Thursday/next week, we can take a quick look at what the graph of monthly temperature vs. alpha diversity looks like:
+```{r}
+ggplot(combined, aes(x = monthlyMean,
+                     y = alpha, 
+                     col= siteID)) +
+  geom_point() + 
+  facet_grid(siteID~.) +
+  theme_minimal()
+```
+
