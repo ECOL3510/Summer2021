@@ -1,0 +1,193 @@
+---
+title: "Performing ANOVA and linear regression in R"
+output: html_document
+---
+
+## Load necessary packages and cleaned data files
+As always, we first install our necessary packages to run this R script. If you have not previously installed the packages, you will need to add an `install_packages("")` command **before** the `library()` command in the chunk below.
+```{r, message=F}
+#install.packages('pacman', repos = "http://cran.us.r-project.org")
+pacman::p_load(tidyverse, broom, lubridate, performance, see, qqplotr, gvlma)
+```
+
+We also need to load the data files. Since we already "cleaned" the data previously, we will import the cleaned, ready-to-analyze datasets.
+
+First, we'll upload our temperature data:
+```{r}
+temp <- read_csv('./cleaned_data/monthly_temp.csv')
+glimpse(temp)
+```
+
+Then our cleaned mammal data
+```{r}
+alpha <- read_csv('./cleaned_data/alpha_diversity.csv', guess_max=50000)
+glimpse(alpha)
+```
+
+Because these data came from the same NEON sites, we can combine them using columns that they have in common:
+```{r}
+data <- full_join(temp, alpha) %>% 
+  mutate(siteID = as.factor(siteID)) %>% 
+  filter(!is.na(alpha)) %>% 
+  select(siteID, date, monthlyMean, alpha)
+
+print(data)
+```
+
+## Analysis of Variance- ANOVA
+### Reminder: Why use ANOVA?
+We use Analysis of Variance (ANOVA) to test whether there are statistically meaningful differences between the mean values of **categorical** variables. 
+
+ANOVA tests whether any of the group means are different from the overall mean of the data by checking the variance of each individual group against the overall variance of the data. 
+
+If one or more groups falls outside the range of variation predicted by the null hypothesis (that all group means are equal), then the test is statistically significant.
+
+We would want to follow up a significant ANOVA test with further tests to assess which sites, specifically, were different.
+
+### ANOVA syntax in R
+The syntax of the ANOVA function in R is as follows:  
+**aov(dependent_variable ~ independent variable, data = data_df)**
+
+### ANOVA for our mammal data
+Perhaps we want to see if there are significant differences in alpha diversity among sites. We could use an ANOVA!
+
+First, we define the ANOVA model (which we save as an object called "alpha_anova")
+```{r}
+alpha_anova <- aov(alpha ~ siteID, data = alpha)
+```
+
+Next, we can use some quick commands to check the ANOVA model assumptions:
+```{r, warning=F}
+# Check for homogeneity of variance: 
+leveneTest(alpha ~ siteID, data = alpha)
+# If the p-value of Levene's test is greater than 0.05, we have not violated the assumption of homogeneity of variance
+
+# Check for normality of residuals:
+## 1) Extract the model residuals
+aov_residuals <- residuals(object = alpha_anova)
+## 2) Run Shapiro-Wilk test
+shapiro.test(x = aov_residuals )
+
+# Visualize model checks as graphs
+check_model(alpha_anova)
+```
+
+*(If our data violate the homogeneity of variance assumption, we can instead do a Welch one-way test using the `oneway.test()` function below)*
+```{r}
+oneway.test(alpha ~ siteID, data=alpha)
+
+pairwise.t.test(alpha$alpha, alpha$siteID,
+                 p.adjust.method = "BH", pool.sd = FALSE)
+```
+
+However, our model assumptions seem to be satisfied, so now let's look at the ANOVA output! 
+```{r}
+summary(alpha_anova)
+```
+We can see that the p-value is much smaller than 0.05 (our standard alpha), so we reject the null hypothesis and conclude that *at least one site* differs significantly.
+
+But which site(s) are different? We'll use post-hoc Tukey tests to find out!
+```{r}
+tukey <- tidy(TukeyHSD(alpha_anova))
+print(tukey)
+```
+Note that the "estimate" column tells you how different the mean values of each pair of sites is. 
+
+If you have a *lot* of contrasts, you can update and run the command below to only show the statistically significant (p <0.05) contrasts:
+```{r}
+sig <- tukey %>% 
+  filter(adj.p.value < 0.05)
+
+print(sig)
+```
+
+Quick plot of site-level alpha diversity
+```{r}
+ggplot(data = alpha, aes(x = siteID, # name the variable that goes on the x-axis
+                         y = alpha,  # name the variable that goes on the y-axis
+                         fill = siteID)) + # name the variable to differentiate colors
+  geom_boxplot() + # Graph these variables using boxplots
+  annotate("text", x = 1:3, y = c(6, 10.5, 9.5), label = c("A","C","B")) + # Add a text label to differentiate the 
+  theme_minimal()                                                           # statistically-different groups
+  
+```
+
+### Correlation & Linear Regression
+
+### Reminder: Why use linear regression?
+We use linear regression to test for a relationship between two **continuous** variables.
+
+Here, we could look at whether alpha diversity is correlated with mean temperature across sites
+
+First, we should make a quick plot to see what the data look like
+```{r}
+ggplot(data = data, aes(x = monthlyMean, # name the variable that goes on the x-axis
+                        y = alpha,  # name the variable that goes on the y-axis
+                        col = siteID)) + # name the variable to differentiate colors
+  geom_point(pch = 16) +  # Graph these variables as a scatterplot
+  theme_minimal()
+```
+
+## Correlation
+We can calculate a correlation coefficient to quantify the strength and direction of association between the two variables.
+
+The types of correlation you can use are:  
+
+* Pearson: Parametric correlation (requires data be normally distributed) for continuous data   
+
+* Spearman: Non-parametric (e.g., if your data are not normally distributed) correlation can also take ordinal data
+
+```{r}
+cor_alpha <- cor.test(data$monthlyMean, data$alpha, method = "pearson") # can also use method = "spearman"
+
+tidy(cor_alpha)
+```
+
+Next, let's set up and run a linear model to conduct a linear regression.
+```{r, warning=F}
+alpha_lm <- lm(alpha ~ monthlyMean, data = data)
+check_model(alpha_lm)
+gvlma(alpha_lm)
+```
+Since our data generally meet the model assumptions for linear regression, we will go ahead and interpret our findings!
+```{r}
+summary(alpha_lm)
+```
+While our intercept is significantly different from zero, the slope is not significant. The R2 value is also extremely low (minimal predictive power of alpha if we only know monthly mean temperature!)
+```{r, message=F}
+ggplot(data = data, aes(x = monthlyMean, # name the variable that goes on the x-axis
+                        y = alpha,  # name the variable that goes on the y-axis
+                        col = siteID)) + # name the variable to differentiate colors
+  geom_point(pch = 16) +  # Graph these variables as a scatterplot
+  geom_smooth(method = 'lm', aes(group=1), col = 'black', lty = 2) +  # lty=1 for solid line
+  #geom_abline(intercept = 6.81098, slope = -0.08871) +  # Alternate method than geom_smooth to specify line slope & intercept
+  theme_minimal()
+```
+
+You can also run your regression on a *per site* basis:
+```{r}
+fitted_models = data %>% 
+  nest(data = -siteID) %>% # Indicate the "grouping" variable
+  mutate(model = map(data, ~lm(alpha ~ monthlyMean, data = .)),
+         tidied = map(model, tidy)) %>% 
+  unnest(tidied)
+
+print(fitted_models)
+```
+Based on this output, there are multiple sites for which the y-intercept is different than zero, but there are not any significant slopes between mean temperature and alpha diversity. This could be because:
+
+1) There truly is no relationship between monthly mean temperature and small mammal alpha diversity
+
+2a) The variance in our current sample is too high to capture the true relationship
+
+2b) The sample size is too small to capture the true relationship
+
+While the graph below shows the calculated best fit lines for each site, recall that our convention is to **omit** the trend line for non-significant relationships.
+```{r, message=F}
+ggplot(data = data, aes(x = monthlyMean, # name the variable that goes on the x-axis
+                        y = alpha,  # name the variable that goes on the y-axis
+                        col = siteID)) + # name the variable to differentiate colors
+  geom_point(pch = 16) +  # Graph these variables as a scatterplot
+  geom_smooth(method = 'lm', lty = 2) +  # lyt=1 for solid line
+  theme_minimal()
+```
