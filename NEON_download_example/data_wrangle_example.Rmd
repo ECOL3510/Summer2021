@@ -21,7 +21,7 @@ for(file in files){
   perpos <- which(strsplit(file, "")[[1]]==".")
   assign(
     gsub(" ","",substr(file, 1, perpos-1)),
-    read_csv(paste(path,file,sep=""), guess_max = 10000))
+    read_csv(paste(path,file,sep=""), guess_max = 100000))
 }
 ```
 
@@ -110,10 +110,11 @@ Now we can use some of the same `dplyr` functions to begin filtering, organizing
 ```{r}
 mam <- mam_raw %>% 
   filter(!is.na(tagID)) %>% 
-  select(siteID, plotID, collectDate, tagID:weight, dataQF) %>% 
   mutate(date = as.Date(collectDate),
          month = month(date),
-         year = year(date))
+         year = year(date)) %>% 
+  select(siteID, date, month, year, plotID, tagID, taxonID:identificationQualifier, 
+         nativeStatusCode:fate, hindfootLength:weight, dataQF) 
 ```
 
 If you want to save a copy of your *subset* data file, you can run the following command:
