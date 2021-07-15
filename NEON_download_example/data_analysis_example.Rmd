@@ -46,7 +46,7 @@ summary <- data %>%
             meanTemp = mean(monthlyMean), sdTemp = sd(monthlyMean), seTemp = sdTemp/sqrt(n),
             meanAlpha = mean(alpha), sdAlpha = sd(alpha), seAlpha = sdAlpha/sqrt(n))
 
-print(summary)
+glimpse(summary)
 ```
 To simplify reporting, we can also ask R to round all of these calculated values to a specific number of decimal places:
 ```{r}
@@ -55,7 +55,6 @@ summary <- as_tibble(summary) %>%
 
 print(summary)
 ```
-
 
 ## Analysis of Variance- ANOVA
 ### Reminder: Why use ANOVA?
