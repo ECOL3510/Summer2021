@@ -34,6 +34,29 @@ data <- full_join(temp, alpha) %>%
 print(data)
 ```
 
+## Summary/descriptive statistics
+Often, we report summary statistics like the mean, a measure of variance (standard deviation, standard error, 95% confidence intervals) and the sample size. 
+
+We can do this easily through the use of `dplyr()` commands. In this example, we can calculate average annual values per site using:
+```{r}
+summary <- data %>% 
+  mutate(year = year(date)) %>% 
+  group_by(siteID, year) %>% 
+  summarize(n = n(),
+            meanTemp = mean(monthlyMean), sdTemp = sd(monthlyMean), seTemp = sdTemp/sqrt(n),
+            meanAlpha = mean(alpha), sdAlpha = sd(alpha), seAlpha = sdAlpha/sqrt(n))
+
+print(summary)
+```
+To simplify reporting, we can also ask R to round all of these calculated values to a specific number of decimal places:
+```{r}
+summary <- as_tibble(summary) %>% 
+  mutate_at(vars(meanTemp:seAlpha), funs(round(.,2)))
+
+print(summary)
+```
+
+
 ## Analysis of Variance- ANOVA
 ### Reminder: Why use ANOVA?
 We use Analysis of Variance (ANOVA) to test whether there are statistically meaningful differences between the mean values of **categorical** variables. 
