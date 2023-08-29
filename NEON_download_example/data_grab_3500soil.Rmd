@@ -1,0 +1,204 @@
+---
+title: "NEON data download"
+output: 
+  html_document:
+    keep_md: true
+---
+
+### Install & load packages  
+```{r}
+#install.packages('tidyverse', repos = "http://cran.us.r-project.org")
+#install.packages('neonUtilities', repos = "http://cran.us.r-project.org")
+
+library(tidyverse)
+library(neonUtilities)
+library(lubridate)
+library(maps)
+```
+
+### Preparing to download data from NEON website
+Now that our packages are loaded, we are ready to start exploring data! 
+
+For each type of NEON data you want to download, you need to know a few things:
+* The specific data product ID (e.g., 'DP1.10072.001')  
+* The 4-letter code for your target NEON site (e.g., 'HARV')  
+* If applicable, the YYYY-MM start and end dates (e.g., '2019-12')  
+
+If you are unsure about the specific data product IDs you need or site codes, navigate to the [NEON data portal](https://data.neonscience.org/data-products/explore) to find that information.
+
+### Soil physical and chemical properties
+f you do not want to specify start- and end-dates for your data download, you can omit those lines, which will have R download data from all available dates. **Note that after you initiate the following code chunk, you need to go into the Console and type y to proceed with the download**
+
+#### Download raw data from NEON: Soil physical and chemical properties
+```{r, eval = FALSE}
+list2env((loadByProduct(dpID = 'DP1.10086.001',
+                           site = 'all',
+                           startdate = '2019-06',  # YYYY-MM
+                           enddate = '2020-08',
+                        nCores=3)),  # YYYY-MM
+         .GlobalEnv)
+```
+
+#### Save each downloaded file
+We now want to save a *local* copy of each of these files, so we don't have to run this download script each time we want to work with the data!
+```{r, eval = FALSE}
+files <- mget(ls())
+
+for (i in 1:length(files)){
+  write_csv(files[[i]], file = paste0("./raw_soils/", names(files[i]), ".csv", sep=""))
+}
+```
+
+# Summarize & simplify datasets for ECOL 3500L assignment
+## pH (soilInWaterpH)
+```{r}
+soilpH <- read_csv('./raw_soils/sls_soilpH.csv')
+```
+Summarize by site/date, "M" horizon only
+```{r}
+subset_pH <- soilpH %>% 
+  mutate(month = month(collectDate)) %>%   
+  filter(horizon == "M" & month %in% c(8)) %>% 
+  group_by(siteID, plotID, month) %>% 
+  summarize(meanpH = round(mean(soilInWaterpH),2))
+```
+
+```{r}
+subset_pH %>% 
+  group_by(siteID) %>% 
+  summarize(n = n()) %>% 
+  arrange(-n)
+```
+
+```{r}
+pH_assign <- subset_pH %>% 
+  filter(siteID %in% c('BONA','DSNY','JORN','OAES','SRER','UKFS','WOOD','YELL')) %>% 
+  write_csv('./raw_soils/pHsubset.csv')
+```
+
+```{r}
+subset_pH %>% 
+  group_by(siteID) %>% 
+  summarize(mean = round(mean(meanpH),2)) %>% 
+  arrange(-mean)
+```
+
+## Soil nutrients
+```{r}
+chem <- read_csv('./raw_soils/sls_soilChemistry.csv')
+```
+
+Summarize by site/date, "M" horizon only
+```{r}
+subset_chem <- chem %>% 
+  mutate(month = month(collectDate)) %>%   
+  select(siteID, month, nitrogenPercent, organicCPercent) %>% 
+  write_csv('./raw_soils/chem_subset.csv')
+```
+
+```{r}
+nuts <- subset_chem %>% 
+  mutate(TN = (nitrogenPercent/100)*1000,
+         TC = (organicCPercent/100)*1000) %>% 
+  select(siteID, TN, TC) %>% 
+  drop_na() %>% 
+  filter(siteID != "BONA" & siteID != "NOGP" & siteID != "NIWO" & siteID != "TREE" & siteID != "WREF") %>% 
+  write_csv('./raw_soils/minimal.csv')
+
+ggplot(nuts, aes(x= TN, y = TC, col=siteID))+
+  geom_point()
+```
+
+
+```{r}
+model_name2 <- lm(TN ~ TC, data = nuts)
+summary(model_name2)
+```
+```{r}
+library(gvlma)
+gvlma(model_name2)
+```
+
+## Read in metadata for all NEON sites
+```{r, message=FALSE}
+sites_all <- read_csv('./NEON_Field_Site_Metadata_20210226_0.csv') %>% 
+  select(domainID:colocated_site, latitude:longitude, state:country)
+```
+
+## Define the list of your project's sites
+```{r}
+# Update this list to include your team's study sites
+# Note that each site should be in all-caps, and contained inside quotation marks
+
+mySites <- c('BONA', 'DSNY', 'UKFS', 'WOOD', 'YELL','JERC','UNDE','KONA','DELA','RMNP')
+```
+
+## Subset "sites" object for your project sites
+```{r}
+sites <- sites_all %>% 
+  filter(siteID %in% mySites) %>% 
+  arrange(siteID) %>% 
+  write_csv('./raw_soils/my.sites.csv')
+
+print(sites)
+```
+
+## List state names of your sites
+```{r}
+myStates <- as.character(sites$state)
+print(myStates)
+```
+
+
+## Map your sites!
+If all your sites are in the contiguous US ("lower 48"), you can use the script below:
+```{r myMap}
+# Run this chunk all at once to avoid plotting errors
+par(oma=c(2,2,1,1), mar = c(0,0,0,0),mgp=c(0,0,0))
+
+maps::map('state', col='black', lwd=2) 
+maps::map('state', region = myStates, add = T, fill=T, col='lightblue2')  # Customize the fill color if you want!
+
+points(sites$longitude, sites$latitude, 
+       col='black', pch=16, cex=1.5,lwd=1)
+
+axis(1, at=seq(-124,-68, 8), padj=1.5, cex.axis=1)
+mtext("Longitude", 1, line=2.5, cex=1.25)
+
+axis(2, at=c(25,31, 37, 43, 49), las=2, hadj=1.75, cex.axis=1)
+mtext("Latitude", 2, line=2.5, cex=1.25)
+
+text(sites$longitude, sites$latitude, sites$siteID,
+     cex=1, font=2, 
+     pos = c(4, 1, 4, 4)) # 1 = below; 2 = left; 3 = above; 4 = right
+```
+
+```{r myMap}
+#### World slice to include USA + European sites ####
+ylim = c(15,90)
+xlim = c(-180,-20)
+
+par(mar = c(0,0,0,0),mgp=c(0,0,0))
+maps::map('world',ylim=ylim, xlim=xlim, col='transparent') #blank to avoid partial borders
+maps::map('world', border='grey50', col='grey90', fill=T,
+          xlim=xlim+c(-2,2), ylim=ylim+c(-2,2))
+maps::map('state', add=T, fill=T, lwd=0.3, border='grey50', col='grey90')
+#maps::map('state', regions=sites$state, add=T, col='dodgerblue', fill=T)
+points(sites$longitude, sites$latitude,col='black', pch=18, cex=1.25,lwd=1)
+text(sites$longitude, sites$latitude, sites$siteID,cex=1, font=2, 
+     pos=c(3,#BONA
+           2,#Dela
+           4,#DSNY
+           4,#JERC
+           3,#KONA
+           2,#RMNP
+           4,#UKFS
+           4,#UNDE
+           3,#WOOD
+           2))#YELL
+# 1 below
+# 2 left
+# 3 above
+# 4 right
+```
+
